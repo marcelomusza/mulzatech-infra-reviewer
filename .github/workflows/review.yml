@@ -1,0 +1,66 @@
+name: Infra review
+
+on:
+  workflow_call:
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    # Fork PRs get no secrets, so skip them cleanly instead of failing.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: target
+
+      - name: Check out the reviewer
+        uses: actions/checkout@v4
+        with:
+          repository: marcelomusza/mulzatech-infra-reviewer
+          path: reviewer
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r reviewer/requirements.txt
+
+      - name: Build the diff
+        working-directory: target
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git diff "origin/$BASE_REF"...HEAD -- . \
+            ':(exclude)app/public/js-dos' \
+            ':(exclude)*.jsdos' > ../pr.diff
+          wc -c ../pr.diff
+
+      - name: Review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python reviewer/review.py pr.diff > review.md
+
+      - name: Post or update the PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          EXISTING=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- mulzatech-infra-reviewer -->"))) | .id' \
+            | head -n1)
+          if [ -n "$EXISTING" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$EXISTING" -F body=@review.md
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file review.md
+          fi

@@ -1,0 +1,17 @@
+diff --git a/docs/phases/phase-6-hardening.md b/docs/phases/phase-6-hardening.md
+--- a/docs/phases/phase-6-hardening.md
++++ b/docs/phases/phase-6-hardening.md
+@@ -10,3 +10,3 @@
+-Phase 6 translated each into a concrete acton that fits
++Phase 6 translated each into a concrete action that fits
+diff --git a/infra/locals.tf b/infra/locals.tf
+--- a/infra/locals.tf
++++ b/infra/locals.tf
+@@ -3,5 +3,6 @@ locals {
+   common_tags = {
+     project     = var.project_name
+     managed_by  = "terraform"
+     environment = "production"
++    owner       = "marcelomusza"
+   }
+ }
